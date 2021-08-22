@@ -3,7 +3,7 @@ const express = require("express");
 const ejs = require("ejs");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
+const md5 = require("md5");
 
 const app = express();
 
@@ -22,9 +22,7 @@ const userSchema = new mongoose.Schema({
   password: String,
 });
 
-//This is to encrypt the password in our user document to store in DB
-//The secret key used to encrypt password is defined in .env file
-userSchema.plugin(encrypt, {secret : process.env.SECRET, encryptedFields: ["password"]});
+
 
 const User = new mongoose.model("User", userSchema);
 
@@ -48,7 +46,7 @@ app.get("/register", (req, res) => {
 app.post("/register", (req, res) => {
   const newUser = new User({
     email: req.body.username,
-    password: req.body.password,
+    password: md5(req.body.password),
   });
   newUser.save((err) => {
     if (err) {
@@ -63,12 +61,13 @@ app.post("/register", (req, res) => {
 //first checking if the user with that email exists or not by using findOne()
 //and if exists, then checking if the entered password is correct or not
 app.post("/login", (req, res) => {
+  const pass = md5(req.body.password);
   User.findOne({ email: req.body.username }, (err, foundUser) => {
     if (err) {
       console.log(err);
     } else {
       if (foundUser) {
-          if(foundUser.password === req.body.password){
+          if(foundUser.password === pass){
               res.render("secrets");
           }else{
               res.send("Invalid Password!");
