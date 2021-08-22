@@ -8,6 +8,7 @@ const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const findOrCreate = require("mongoose-findorcreate");
+const e = require("express");
 
 const app = express();
 
@@ -35,7 +36,8 @@ mongoose.set("useCreateIndex", true);
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
-  googleId : String
+  googleId: String,
+  secret: String,
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -45,12 +47,12 @@ const User = new mongoose.model("User", userSchema);
 
 passport.use(User.createStrategy());
 
-passport.serializeUser(function(user, done){
+passport.serializeUser(function (user, done) {
   done(null, user.id);
 });
 
-passport.deserializeUser(function(id, done){
-  User.findById(id, (err, user)=>{
+passport.deserializeUser(function (id, done) {
+  User.findById(id, (err, user) => {
     done(err, user);
   });
 });
@@ -82,12 +84,14 @@ app.get(
   passport.authenticate("google", { scope: ["profile"] })
 );
 
-app.get("/auth/google/secrets", 
+app.get(
+  "/auth/google/secrets",
   passport.authenticate("google", { failureRedirect: "/login" }),
-  function(req, res) {
+  function (req, res) {
     // Successful authentication, redirect secrets.
     res.redirect("/secrets");
-  });
+  }
+);
 
 //login page route
 app.get("/login", (req, res) => {
@@ -101,16 +105,43 @@ app.get("/register", (req, res) => {
 
 //secrets page route
 app.get("/secrets", (req, res) => {
-  if (req.isAuthenticated()) {
-    res.render("secrets");
-  } else {
-    res.redirect("/login");
-  }
+  User.find({ secret: { $ne: null } }, (err, foundUser)=>{
+    if(err){
+      console.log(err);
+    }else{
+      if(foundUser){
+        res.render("secrets",{userWithSecrets : foundUser});
+      }
+    }
+  });
 });
 
 app.get("/logout", (req, res) => {
   req.logout();
   res.redirect("/");
+});
+
+app.get("/submit", (req, res) => {
+  if (req.isAuthenticated()) {
+    res.render("submit");
+  } else {
+    res.redirect("/login");
+  }
+});
+
+app.post("/submit", (req, res) => {
+  const submittedSecret = req.body.secret;
+  User.findById(req.user.id, (err, foundUser) => {
+    if (err) {
+      console.log(err);
+    } else {
+      if (foundUser) {
+        foundUser.secret = submittedSecret;
+        foundUser.save();
+        res.redirect("/secrets");
+      }
+    }
+  });
 });
 
 //post route after creating a user by entering email and password
